@@ -34,45 +34,48 @@ jobs:
 
       - name: Publish the visual diff
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
           DIST: ${{ steps.archdiff.outputs.viewer-dist }}
+          OUT: .archdiff-out
         run: |
           set -euo pipefail
+          SRC="$PWD/$OUT"
           STAGE="$RUNNER_TEMP/pages"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           # Retry: concurrent PR runs push to the same branch, and losing that
           # race must not fail a review comment.
           for attempt in 1 2 3 4 5; do
-            rm -rf "$STAGE"
-            if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
-              git clone --depth 1 --branch gh-pages "$(git remote get-url origin)" "$STAGE"
-            else
-              git clone --depth 1 "$(git remote get-url origin)" "$STAGE"
-              git -C "$STAGE" checkout --orphan gh-pages
-              git -C "$STAGE" rm -rq --cached . || true
-              find "$STAGE" -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+            rm -rf "$STAGE"; mkdir -p "$STAGE"; cd "$STAGE"
+            git init -q
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git remote add origin "$REMOTE"
+            # Start from the published site when it exists, so other PRs' data
+            # survives; otherwise this is the first publish.
+            if git fetch -q --depth 1 origin gh-pages 2>/dev/null; then
+              git checkout -q FETCH_HEAD
             fi
+            git checkout -q -B gh-pages
 
             # The app is republished every run so it can never drift from the
             # data shape it has to render. One directory per PR, overwritten.
-            rsync -a --delete --exclude data "$DIST"/ "$STAGE"/
-            mkdir -p "$STAGE/data/pr/$PR"
-            cp .archdiff-out/base.graph.json .archdiff-out/head.graph.json \
-               .archdiff-out/diff.json "$STAGE/data/pr/$PR/"
-            touch "$STAGE/.nojekyll"
+            rsync -a --delete --exclude data "$DIST"/ ./
+            mkdir -p "data/pr/$PR"
+            cp "$SRC/base.graph.json" "$SRC/head.graph.json" "$SRC/diff.json" "data/pr/$PR/"
+            touch .nojekyll
 
-            git -C "$STAGE" add -A
-            if git -C "$STAGE" diff --cached --quiet; then
+            git add -A
+            if git diff --cached --quiet; then
               echo "pages content unchanged"; break
             fi
-            git -C "$STAGE" commit -qm "archdiff: visual diff for PR #$PR"
-            if git -C "$STAGE" push -q origin gh-pages; then
-              echo "published"; break
+            git commit -qm "archdiff: visual diff for PR #$PR"
+            if git push -q origin gh-pages; then
+              echo "published data/pr/$PR"; break
             fi
             echo "push race on attempt $attempt; retrying"
-            sleep $((attempt * 3))
+            sleep $(( attempt * 3 ))
           done
 
       - name: Comment on the PR
