@@ -39,7 +39,7 @@ jobs:
           DIST: ${{ steps.archdiff.outputs.viewer-dist }}
           OUT: .archdiff-out
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           SRC="$PWD/$OUT"
           STAGE="$RUNNER_TEMP/pages"
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
