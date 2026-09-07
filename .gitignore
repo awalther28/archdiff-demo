@@ -5,3 +5,7 @@
 *.tfstate.*
 crash.log
 .tofu-plugin-cache/
+
+# Plan JSON is a build artifact, never committed. CI regenerates it for both
+# sides of every pull request; scripts/gen-plans.sh writes it here locally.
+/plans/

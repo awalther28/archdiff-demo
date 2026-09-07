@@ -7,6 +7,9 @@ demonstrate one thing the differ must get right.
 
 Nothing here is ever applied. Every plan runs offline: no AWS account, no
 state, no network (beyond the one-time provider download), fake credentials.
+Plan JSON is never committed: CI plans both sides of every pull request
+itself, and `scripts/gen-plans.sh` writes plans on demand into the gitignored
+`plans/` directory (see [Generating the plans](#generating-the-plans)).
 
 ## Accounts
 
@@ -17,6 +20,10 @@ state, no network (beyond the one-time provider download), fake credentials.
 
 A third account, `555566667777`, appears only as an external principal (a
 third-party auditor). Nothing in it is managed here.
+
+Both IDs are passed at plan time as `-var account_id=...`: by
+`scripts/gen-plans.sh` locally, and by the CI action from the `vars` map in
+`.archdiff.json`. There is no committed plan to look them up in.
 
 Each root declares its account identity through a single required input
 variable, `account_id`, which carries a `validation {}` block asserting a
@@ -44,11 +51,13 @@ flags; they say nothing about which account they target.
 live/mgmt/            root module, management account
 live/prod/            root module, prod workload account
 modules/app-role/     child module: application runtime role + read policy
-plans/<branch>/       committed plan JSON for each branch, one file per root
-scripts/gen-plans.sh  regenerates plans/<branch>/ for the current branch
+plans/<ref>/          generated plan JSON, one file per root; gitignored,
+                      never committed
+scripts/gen-plans.sh  writes plans/<ref>/ for the working tree or for any
+                      committed ref(s)
 scripts/effective_permissions.py
                       verification aid: name-keyed, order-independent view of
-                      effective permissions; diffs two branches' plans
+                      effective permissions; diffs two refs' generated plans
 ```
 
 ## Resources
@@ -158,7 +167,23 @@ Note that `moved {}` blocks do **not** appear anywhere in `tofu show -json`
 output when there is no prior state; a differ that honours them must read
 them from the HCL source.
 
-## Regenerating the plans
+## Generating the plans
+
+Plan JSON is a build artifact and is **not committed**. It is large, it is
+noisy in diffs, it goes stale the moment the HCL changes, and a reviewer
+cannot tell whether a committed plan actually corresponds to the committed
+configuration. Plans are therefore generated where they are consumed:
+
+- **In CI, on every pull request.** `.github/workflows/archdiff-pr.yml` runs
+  the `awalther28/archdiff` analyze action, which runs `tofu init`,
+  `tofu plan -refresh=false` and `tofu show -json` for each root declared in
+  `.archdiff.json`, once on the PR head and once on the base ref in a
+  separate worktree, then extracts and diffs the two permission graphs. Both
+  sides are always planned by the same tool version in the same run, and CI
+  reads nothing from `plans/`. `archdiff-baseline.yml` does the same for
+  `main` on push to publish the graph baseline.
+- **Locally, on demand,** with `scripts/gen-plans.sh`, which writes
+  `plans/<ref>/{mgmt,prod}.plan.json`. `plans/` is gitignored.
 
 Requires `tofu` (tested with OpenTofu 1.12.6) and, on first run, network
 access to download the AWS provider (`~> 6.0`; the committed lock files pin
@@ -166,8 +191,10 @@ access to download the AWS provider (`~> 6.0`; the committed lock files pin
 in each root once, or `tofu providers lock -platform=...`).
 
 ```sh
-git checkout <branch>
-scripts/gen-plans.sh            # writes plans/<branch>/{mgmt,prod}.plan.json
+scripts/gen-plans.sh                  # the working tree -> plans/<current-branch>/
+scripts/gen-plans.sh main pr/star-policy
+                                      # any committed refs, each checked out in a
+                                      # temporary worktree -> plans/<ref>/
 ```
 
 The script is equivalent to running, in each of `live/mgmt` and `live/prod`,
@@ -178,12 +205,15 @@ AWS_EC2_METADATA_DISABLED=true` in the environment:
 tofu init
 tofu plan -refresh=false -out=tfplan -var account_id=999988887777   # mgmt
 tofu plan -refresh=false -out=tfplan -var account_id=111122223333   # prod
-tofu show -json tfplan > ../../plans/<branch>/<root>.plan.json
+tofu show -json tfplan > ../../plans/<ref>/<root>.plan.json
 ```
 
 ## Verifying the branch claims yourself
 
 ```sh
+# generate all four branches' plans without leaving the current checkout
+scripts/gen-plans.sh main pr/star-policy pr/invisible-escalation pr/refactor-noop
+
 # refactor must be a no-op
 scripts/effective_permissions.py plans/main plans/pr/refactor-noop
 #   -> IDENTICAL effective permissions

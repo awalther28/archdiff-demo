@@ -7,7 +7,12 @@ differ. It deliberately keys everything by *name* (role name, policy name,
 bucket name) rather than by Terraform address, and it sorts statements, so a
 module move, file rename or statement reorder produces byte-identical output.
 
+Each argument is a directory holding {mgmt,prod}.plan.json. Plan JSON is
+not committed; generate it first with scripts/gen-plans.sh, which writes
+plans/<ref>/ (gitignored) for the working tree or for any committed ref.
+
 Usage:
+    scripts/gen-plans.sh main pr/x                              # generate
     scripts/effective_permissions.py plans/main                 # dump
     scripts/effective_permissions.py plans/main plans/pr/x      # diff
     scripts/effective_permissions.py --paths plans/main         # assume paths
@@ -101,8 +106,12 @@ def summarise(plan):
             "buckets": sorted(buckets), "kms_keys": sorted(keys)}
 
 
-def load(branch_dir):
-    d = pathlib.Path(branch_dir)
+def load(plan_dir):
+    d = pathlib.Path(plan_dir)
+    missing = [str(d / f"{root}.plan.json") for root in ROOTS if not (d / f"{root}.plan.json").exists()]
+    if missing:
+        raise SystemExit("missing plan JSON: " + ", ".join(missing)
+                         + "\n(plans are not committed; run scripts/gen-plans.sh [REF...] first)")
     return {root: summarise(json.load(open(d / f"{root}.plan.json"))) for root in ROOTS}
 
 
