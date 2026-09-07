@@ -118,8 +118,10 @@ No path changes.
 One line changed in `live/mgmt/main.tf`: the trust policy of `mgmt-deploy`
 gains `local.gha_role_arn` as an allowed principal. The diff mentions only
 `gha` and `mgmt-deploy`; it never mentions `prod`, `admin`, or any privileged
-action, and the `live/prod` plan is byte-for-byte unchanged in content. Yet it
-creates a new, unconditional, cross-account path:
+action, and the `live/prod` plan is unchanged (its JSON differs from `main`
+only in `timestamp` and in the emission order of `relevant_attributes`, which
+OpenTofu does not sort). Yet it creates a new, unconditional, cross-account
+path:
 
 ```
 mgmt:gha ---> mgmt:mgmt-deploy ---> prod:prod-app-admin     (2 hops, NEW)
