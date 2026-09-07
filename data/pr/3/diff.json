@@ -1,0 +1,81 @@
+{
+  "base": {
+    "graph_digest": "bd531bcd9f4dda18",
+    "ref": "base"
+  },
+  "empty": true,
+  "findings": [],
+  "head": {
+    "graph_digest": "bd531bcd9f4dda18",
+    "ref": "head"
+  },
+  "moves_applied": [
+    {
+      "from": "aws_iam_role.deployer",
+      "scope_key": "aws:111122223333:us-east-1",
+      "to": "module.deployer.aws_iam_role.this"
+    },
+    {
+      "from": "aws_iam_role_policy.deployer",
+      "scope_key": "aws:111122223333:us-east-1",
+      "to": "module.deployer.aws_iam_role_policy.this"
+    },
+    {
+      "from": "module.app",
+      "scope_key": "aws:111122223333:us-east-1",
+      "to": "module.workload"
+    }
+  ],
+  "schema_version": "1.0",
+  "semantic": {
+    "capabilities": {
+      "added": [],
+      "removed": []
+    },
+    "paths": {
+      "added": [],
+      "removed": []
+    }
+  },
+  "stats": {
+    "edges_compared": 0,
+    "merkle": {
+      "enabled": true,
+      "fallback_reason": null,
+      "prune_points": 1,
+      "verified": true
+    },
+    "modules_compared": 0,
+    "modules_skipped": 5,
+    "modules_total": 5,
+    "nodes_compared": 0,
+    "semantic": {
+      "max_hops": 4,
+      "mode": "incremental",
+      "paths_enumerated": 0,
+      "principals_evaluated": 0
+    },
+    "unevaluated_edges_in_head": 3
+  },
+  "structural": {
+    "edges": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "nodes": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    }
+  },
+  "tool": {
+    "catalog": "bundled-2026-09",
+    "catalog_services": "iam, kms, s3, secretsmanager, sts",
+    "limits": "wildcard expansion covers only the bundled catalog (bundled-2026-09: s3, sts, iam, kms, secretsmanager); privilege paths bounded to 4 hops",
+    "name": "archdiff-differ",
+    "version": "0.1.0"
+  },
+  "unevaluated": [],
+  "warnings": []
+}
