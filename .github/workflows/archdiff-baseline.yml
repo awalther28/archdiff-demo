@@ -1,0 +1,40 @@
+name: archdiff baseline
+
+# The committed graph is the published baseline: it makes the permission
+# architecture a reviewable artifact in git history. It is NOT the diff input --
+# each PR re-plans both sides itself, so the two graphs can never come from
+# different tool versions.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the permission graph
+        id: archdiff
+        uses: awalther28/archdiff/.github/actions/analyze@main
+        with:
+          mode: baseline
+          out-dir: .archdiff-out
+
+      - name: Commit the graph if it changed
+        run: |
+          set -euo pipefail
+          mkdir -p .archdiff
+          cp "${{ steps.archdiff.outputs.graph-path }}" .archdiff/permission-graph.json
+          if git diff --quiet -- .archdiff/permission-graph.json; then
+            echo "permission graph unchanged"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .archdiff/permission-graph.json
+          git commit -m "archdiff: update permission graph baseline"
+          git push

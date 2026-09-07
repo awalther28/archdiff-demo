@@ -1,0 +1,60 @@
+name: archdiff
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: archdiff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  permissions-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the base ref is checked out into a worktree so both
+          # sides are extracted by the same tool version in the same run.
+          fetch-depth: 0
+
+      - name: Analyse permission changes
+        id: archdiff
+        uses: awalther28/archdiff/.github/actions/analyze@main
+        with:
+          base-ref: ${{ github.base_ref }}
+
+      - name: Comment on the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY_FILE: ${{ steps.archdiff.outputs.markdown-path }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- archdiff -->'
+          { echo "$MARKER"; cat "$BODY_FILE"; } > /tmp/comment.md
+
+          # One sticky comment per PR, updated in place. A new comment on every
+          # push would bury the finding under its own history.
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+                 --jq "[.[] | select(.body | startswith(\"$MARKER\"))] | first | .id // empty")
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+                   -F body=@/tmp/comment.md >/dev/null
+            echo "updated comment $ID"
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+                   -F body=@/tmp/comment.md >/dev/null
+            echo "created comment"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archdiff-${{ github.event.pull_request.number }}
+          path: .archdiff-out/
+          if-no-files-found: ignore

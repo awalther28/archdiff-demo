@@ -1,0 +1,16 @@
+{
+  "roots": {
+    "mgmt": {
+      "dir": "live/mgmt",
+      "vars": { "account_id": "999988887777" }
+    },
+    "prod": {
+      "dir": "live/prod",
+      "vars": { "account_id": "111122223333" }
+    }
+  },
+  "scopes": {
+    "mgmt": { "account_id": "999988887777", "region": "us-east-1" },
+    "prod": { "account_id": "111122223333", "region": "us-east-1" }
+  }
+}
