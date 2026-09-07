@@ -1,0 +1,7 @@
+# OpenTofu working files -- never commit provider binaries or plan binaries
+**/.terraform/
+**/tfplan
+*.tfstate
+*.tfstate.*
+crash.log
+.tofu-plugin-cache/
