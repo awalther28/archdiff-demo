@@ -33,19 +33,29 @@ jobs:
           viewer-base: /archdiff-demo/
 
       - name: Publish the visual diff
+        id: publish
+        # A lost push race or a Pages hiccup must never block the review
+        # comment; the step reports its own outcome instead.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
           DIST: ${{ steps.archdiff.outputs.viewer-dist }}
           OUT: .archdiff-out
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           SRC="$PWD/$OUT"
           STAGE="$RUNNER_TEMP/pages"
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
+          for f in base.graph.json head.graph.json diff.json; do
+            test -s "$SRC/$f" || { echo "::error::missing $SRC/$f"; exit 1; }
+          done
+          test -d "$DIST" || { echo "::error::viewer dist not found: $DIST"; exit 1; }
+
           # Retry: concurrent PR runs push to the same branch, and losing that
-          # race must not fail a review comment.
+          # race must not fail a review comment. Every attempt starts from a
+          # fresh fetch of gh-pages so the loser rebuilds on the winner's tip.
           for attempt in 1 2 3 4 5; do
             rm -rf "$STAGE"; mkdir -p "$STAGE"; cd "$STAGE"
             git init -q
@@ -55,28 +65,34 @@ jobs:
             # Start from the published site when it exists, so other PRs' data
             # survives; otherwise this is the first publish.
             if git fetch -q --depth 1 origin gh-pages 2>/dev/null; then
-              git checkout -q FETCH_HEAD
+              git checkout -q -B gh-pages FETCH_HEAD
+            else
+              git checkout -q -B gh-pages
             fi
-            git checkout -q -B gh-pages
 
             # The app is republished every run so it can never drift from the
             # data shape it has to render. One directory per PR, overwritten.
-            rsync -a --delete --exclude data "$DIST"/ ./
+            # --delete prunes stale viewer assets, so everything that is not
+            # part of the viewer must be excluded from it: the repository
+            # itself, the per-PR data tree, and the Pages marker.
+            rsync -a --delete --exclude .git --exclude data --exclude .nojekyll "$DIST"/ ./
             mkdir -p "data/pr/$PR"
             cp "$SRC/base.graph.json" "$SRC/head.graph.json" "$SRC/diff.json" "data/pr/$PR/"
             touch .nojekyll
 
             git add -A
             if git diff --cached --quiet; then
-              echo "pages content unchanged"; break
+              echo "pages content unchanged"; exit 0
             fi
             git commit -qm "archdiff: visual diff for PR #$PR"
             if git push -q origin gh-pages; then
-              echo "published data/pr/$PR"; break
+              echo "published data/pr/$PR at $(git rev-parse --short HEAD)"; exit 0
             fi
             echo "push race on attempt $attempt; retrying"
             sleep $(( attempt * 3 ))
           done
+          echo "::warning::could not publish data/pr/$PR after 5 attempts"
+          exit 1
 
       - name: Comment on the PR
         env:
