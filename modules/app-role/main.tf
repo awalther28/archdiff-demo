@@ -26,7 +26,7 @@ data "aws_iam_policy_document" "data_read" {
   statement {
     sid       = "ReadAppData"
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:*"]
     resources = ["arn:aws:s3:::${var.data_bucket}/*"]
   }
 
