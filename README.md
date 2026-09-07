@@ -10,26 +10,33 @@ state, no network (beyond the one-time provider download), fake credentials.
 
 ## Accounts
 
-| root        | profile | account        | role                |
-|-------------|---------|----------------|---------------------|
-| `live/mgmt` | `mgmt`  | `999988887777` | management account  |
-| `live/prod` | `prod`  | `111122223333` | prod workload account |
+| root        | `account_id`   | role                  |
+|-------------|----------------|-----------------------|
+| `live/mgmt` | `999988887777` | management account    |
+| `live/prod` | `111122223333` | prod workload account |
 
 A third account, `555566667777`, appears only as an external principal (a
 third-party auditor). Nothing in it is managed here.
 
-Each root's `provider "aws"` block names a credentials `profile`, and each
-root takes a required `account_id` variable which is used to assemble literal
-ARNs. Both are visible in the plan JSON (`configuration.provider_config` and
-`variables` respectively), so the extractor can resolve scope from either.
+Each root declares its account identity through a single required input
+variable, `account_id`, which carries a `validation {}` block asserting a
+12-digit AWS account ID and which is used to assemble literal ARNs. It is
+visible in the plan JSON as `variables.account_id.value`, and the validation
+regex is visible in the HCL, so an extractor can resolve each root's scope
+with high confidence from the plan alone. The `provider "aws"` blocks carry
+only fake inline credentials (`access_key = "fake"`) plus the offline `skip_*`
+flags; they say nothing about which account they target.
 
-> Why `profile` and not `allowed_account_ids`? The AWS provider validates
-> `allowed_account_ids` against the account ID it discovers at plan time. With
-> `skip_requesting_account_id = true` that ID is empty, and the plan fails
-> with `AWS account ID not allowed:` (verified on provider 5.100.0 and 6.63.0).
+> Why a variable and not a provider-level setting? A credentials `profile` is
+> a name, not an account ID: resolving it means reading `~/.aws/config`,
+> ambient state a plan consumer must not depend on. `allowed_account_ids` is
+> validated against the account ID the provider discovers at plan time; with
+> `skip_requesting_account_id = true` that ID is empty and the plan fails with
+> `AWS account ID not allowed:` (verified on provider 5.100.0 and 6.63.0).
 > Without the skip, the provider calls STS and fails on fake credentials.
-> `assume_role {}` has the same problem. A named profile is the only
-> provider-level account handle that survives offline planning.
+> `assume_role {}` has the same problem. A plain input variable is the only
+> account handle that both survives offline planning and lands in the plan
+> JSON as a literal.
 
 ## Layout
 
@@ -164,8 +171,8 @@ scripts/gen-plans.sh            # writes plans/<branch>/{mgmt,prod}.plan.json
 ```
 
 The script is equivalent to running, in each of `live/mgmt` and `live/prod`,
-with `AWS_CONFIG_FILE` / `AWS_SHARED_CREDENTIALS_FILE` pointing at throwaway
-files that define fake-credential profiles `mgmt` and `prod`:
+with `AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake AWS_REGION=us-east-1
+AWS_EC2_METADATA_DISABLED=true` in the environment:
 
 ```sh
 tofu init

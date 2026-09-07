@@ -12,9 +12,14 @@ terraform {
 provider "aws" {
   region = var.region
 
-  # Credentials profile. Profile "mgmt" is the management account
-  # (999988887777); see README "Accounts" and scripts/gen-plans.sh.
-  profile = "mgmt"
+  # Fake inline credentials. Nothing here is ever applied and the plan never
+  # talks to AWS. Account identity is NOT declared here: it comes from the
+  # required var.account_id (999988887777, the management account), which is visible in
+  # the plan JSON as variables.account_id.value. A credentials profile is only
+  # a name that resolves through ~/.aws/config, and allowed_account_ids /
+  # assume_role {} both fail offline; see README "Accounts".
+  access_key = "fake"
+  secret_key = "fake"
 
   # Offline planning: no credential validation, no STS/IAM/IMDS calls.
   skip_credentials_validation = true

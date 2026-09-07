@@ -3,8 +3,10 @@
 # plans/<branch>/{mgmt,prod}.plan.json.
 #
 # Runs with NO AWS account, NO state and NO network beyond the provider
-# download on first init. Credentials are fake and live in a throwaway temp
-# dir for the duration of the run; nothing credential-shaped is committed.
+# download on first init. Credentials are fake (the literal string "fake",
+# both in the provider blocks and in the environment below); nothing
+# credential-shaped is committed. Account identity is passed via -var
+# account_id, never derived from a profile.
 #
 # Usage: scripts/gen-plans.sh [branch-name]   (defaults to the current branch)
 set -euo pipefail
@@ -22,18 +24,15 @@ account_for() {
   esac
 }
 
-# --- fake, throwaway AWS profiles -----------------------------------------
-AWS_TMP="$(mktemp -d)"
-trap 'rm -rf "$AWS_TMP"' EXIT
-for root in mgmt prod; do
-  printf '[profile %s]\nregion = us-east-1\n\n' "$root" >> "$AWS_TMP/config"
-  printf '[%s]\naws_access_key_id = fake\naws_secret_access_key = fake\n\n' "$root" >> "$AWS_TMP/credentials"
-done
-export AWS_CONFIG_FILE="$AWS_TMP/config"
-export AWS_SHARED_CREDENTIALS_FILE="$AWS_TMP/credentials"
+# --- fake environment credentials ------------------------------------------
+# The provider blocks already carry access_key/secret_key = "fake"; these
+# env vars make the run self-contained regardless and keep the SDK away from
+# ~/.aws, IMDS and any ambient profile.
+export AWS_ACCESS_KEY_ID=fake
+export AWS_SECRET_ACCESS_KEY=fake
 export AWS_REGION=us-east-1
 export AWS_EC2_METADATA_DISABLED=true
-unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+unset AWS_PROFILE AWS_SESSION_TOKEN AWS_CONFIG_FILE AWS_SHARED_CREDENTIALS_FILE
 
 # Share provider binaries between the two roots.
 export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$REPO/.tofu-plugin-cache}"
