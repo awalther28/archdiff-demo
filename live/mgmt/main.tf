@@ -105,7 +105,7 @@ data "aws_iam_policy_document" "mgmt_deploy_trust" {
 
     principals {
       type        = "AWS"
-      identifiers = [local.sso_operator_role_arn]
+      identifiers = [local.sso_operator_role_arn, local.gha_role_arn]
     }
   }
 }
